@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Cormorant Garamond", Georgia, serif;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --color-ink: #0c0a12;
+  --color-fog: #e8e2f5;
+  --color-violet: #8b5cf6;
+  --color-rose: #f472b6;
+  --color-gold: #f5d78e;
+  --color-panel: #161222;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-fog);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(139, 92, 246, 0.35), transparent 55%),
+    radial-gradient(900px 500px at 90% 0%, rgba(244, 114, 182, 0.22), transparent 50%),
+    radial-gradient(800px 500px at 50% 100%, rgba(245, 215, 142, 0.08), transparent 45%),
+    var(--color-ink);
+  background-attachment: fixed;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.glass {
+  background: rgba(22, 18, 34, 0.72);
+  border: 1px solid rgba(232, 226, 245, 0.1);
+  backdrop-filter: blur(16px);
+}
+
+.glow-btn {
+  box-shadow:
+    0 0 0 1px rgba(245, 215, 142, 0.25),
+    0 10px 40px rgba(139, 92, 246, 0.35);
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.08);
+    opacity: 0.15;
+  }
+  100% {
+    transform: scale(0.92);
+    opacity: 0.7;
+  }
+}
+
+.pulse-ring {
+  animation: pulse-ring 1.6s ease-in-out infinite;
+}
+
+@keyframes flip-in {
+  from {
+    transform: rotateY(90deg) scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: rotateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.flip-in {
+  animation: flip-in 0.55s ease-out both;
+}
