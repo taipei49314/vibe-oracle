@@ -27,6 +27,30 @@ export type OracleFact =
       counsel: string;
     }
   | {
+      kind: "weekday_tone";
+      weekday: string;
+      tone: string;
+      counsel: string;
+    }
+  | {
+      kind: "hexagram";
+      number: number;
+      name: string;
+      pinyin: string;
+      binary: string;
+      judgment: string;
+      counsel: string;
+      changingLines: number[];
+    }
+  | {
+      kind: "lunar_phase";
+      date: string;
+      phase: number;
+      name: string;
+      illumination: number;
+      counsel: string;
+    }
+  | {
       kind: "mood_echo";
       text: string;
       wordCount: number;
@@ -41,12 +65,31 @@ export type OracleReport = {
   shareLine: string;
 };
 
+export type OracleMeta = {
+  requestId: string;
+  day: string;
+  confidenceLabel: "theatrical";
+  policy?: { category: string };
+  seedIgnored?: boolean;
+};
+
 export type OracleResponse = {
-  mode: "live" | "demo";
+  mode: "live" | "demo" | "refused";
   seed: string;
   ritual: DrawnCard[];
   facts: OracleFact[];
   report: OracleReport;
+  meta: OracleMeta;
+};
+
+export type HealthResponse = {
+  ok: boolean;
+  name: string;
+  version?: string;
+  modeCapability?: "live" | "demo" | "none";
+  demoAllowed?: boolean;
+  publicDemo?: boolean;
+  hasKey?: boolean;
 };
 
 export type Step = "landing" | "mood" | "ritual" | "loading" | "report";

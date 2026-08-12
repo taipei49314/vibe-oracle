@@ -1,41 +1,19 @@
 import type { DrawnCard } from "./deck.js";
-import type { DaySeedFact } from "./dayseed.js";
+import { runAllEngines, type EngineFact } from "./registry.js";
 
 /** Structured facts for the LLM — engines write, oracle narrates. */
-export type OracleFact =
-  | {
-      kind: "ritual_card";
-      id: string;
-      name: string;
-      position: string;
-      orientation: string;
-      reading: string;
-      keywords: string[];
-    }
-  | DaySeedFact
-  | {
-      kind: "mood_echo";
-      text: string;
-      wordCount: number;
-    };
+export type OracleFact = EngineFact;
 
-export function buildFacts(mood: string, cards: DrawnCard[], day: DaySeedFact): OracleFact[] {
-  const facts: OracleFact[] = [
-    {
-      kind: "mood_echo",
-      text: mood.trim(),
-      wordCount: mood.trim().split(/\s+/).filter(Boolean).length,
-    },
-    day,
-    ...cards.map((c) => ({
-      kind: "ritual_card" as const,
-      id: c.id,
-      name: c.name,
-      position: c.position,
-      orientation: c.orientation,
-      reading: c.reading,
-      keywords: c.keywords,
-    })),
-  ];
-  return facts;
+export function buildFacts(
+  mood: string,
+  cards: DrawnCard[],
+  date: string,
+  seed: string
+): OracleFact[] {
+  return runAllEngines({
+    mood,
+    cards,
+    date,
+    seed,
+  });
 }

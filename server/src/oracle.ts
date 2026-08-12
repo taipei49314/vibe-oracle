@@ -1,26 +1,19 @@
-import OpenAI from "openai";
-import { z } from "zod";
 import { drawCards } from "./engines/deck.js";
 import { daySeed } from "./engines/dayseed.js";
 import { buildFacts } from "./engines/facts.js";
 import {
-  ORACLE_SYSTEM,
-  buildUserPrompt,
   demoReport,
   type OracleReport,
 } from "./prompts/oracle.js";
+import { loadConfig } from "./config.js";
+import { callLlm, extractJson, LlmError } from "./llm.js";
+import { evaluateContentPolicy } from "./policy/contentPolicy.js";
+import { refuseReport } from "./policy/refuseReport.js";
+import { ReportSchema } from "./schemas.js";
+import { moodCodePointLength } from "./schemas.js";
+import { acquireLiveBudget } from "./middleware/rateLimit.js";
 
-export const ReportSchema = z.object({
-  archetype: z.object({
-    name: z.string().min(2),
-    tagline: z.string().min(2),
-  }),
-  actions: z.tuple([z.string(), z.string(), z.string()]),
-  taboo: z.string().min(2),
-  report: z.string().min(40),
-  confidenceTheater: z.number().int().min(88).max(99),
-  shareLine: z.string().min(2),
-});
+export { ReportSchema, extractJson, LlmError };
 
 export type OracleRequest = {
   mood: string;
@@ -29,80 +22,138 @@ export type OracleRequest = {
   date?: string;
 };
 
+export type OracleMeta = {
+  requestId: string;
+  day: string;
+  confidenceLabel: "theatrical";
+  policy?: { category: string };
+  seedIgnored?: boolean;
+};
+
 export type OracleResponse = {
-  mode: "live" | "demo";
+  mode: "live" | "demo" | "refused";
   seed: string;
   ritual: ReturnType<typeof drawCards>;
   facts: ReturnType<typeof buildFacts>;
   report: OracleReport;
+  meta: OracleMeta;
 };
 
-export function resolveSeed(mood: string, seed?: string, now = new Date()): string {
-  if (seed && seed.trim()) return seed.trim();
+export function resolveSeed(
+  mood: string,
+  seed: string | undefined,
+  now = new Date(),
+  allowClientSeed = loadConfig().allowClientSeed
+): { seed: string; seedIgnored: boolean } {
+  if (allowClientSeed && seed?.trim()) {
+    return { seed: seed.trim().slice(0, 64), seedIgnored: false };
+  }
   const day = now.toISOString().slice(0, 10);
-  return `${day}::${mood.trim().slice(0, 80)}`;
+  return {
+    seed: `${day}::${mood.slice(0, 80)}`,
+    seedIgnored: Boolean(seed?.trim()),
+  };
 }
 
-export function extractJson(text: string): unknown {
-  const trimmed = text.trim();
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1));
-    }
-    throw new Error("Model did not return JSON");
+export function resolveDay(
+  date: string | undefined,
+  allowClientDate = loadConfig().allowClientDate
+): { date: string | undefined; dateIgnored: boolean } {
+  if (allowClientDate && date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { date, dateIgnored: false };
   }
+  return {
+    date: undefined,
+    dateIgnored: Boolean(date && /^\d{4}-\d{2}-\d{2}$/.test(date)),
+  };
 }
 
-async function callLlm(mood: string, facts: ReturnType<typeof buildFacts>): Promise<OracleReport> {
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("NO_KEY");
+export type RunOracleOptions = {
+  requestId: string;
+  /** Client IP for live budget (after policy allow only). */
+  ip?: string;
+  now?: Date;
+};
+
+export class RateLimitedError extends Error {
+  constructor(public readonly retryAfterSec: number) {
+    super("RATE_LIMITED");
+    this.name = "RateLimitedError";
   }
-
-  const client = new OpenAI({
-    apiKey,
-    baseURL: process.env.XAI_BASE_URL || "https://api.x.ai/v1",
-  });
-  const model = process.env.XAI_MODEL || "grok-4.5";
-
-  const completion = await client.chat.completions.create({
-    model,
-    temperature: 0.9,
-    messages: [
-      { role: "system", content: ORACLE_SYSTEM },
-      { role: "user", content: buildUserPrompt(mood, facts) },
-    ],
-  });
-
-  const content = completion.choices[0]?.message?.content;
-  if (!content) throw new Error("Empty model response");
-  return ReportSchema.parse(extractJson(content));
 }
 
 /**
- * Demo only when there is no API key (and ALLOW_DEMO_WITHOUT_KEY).
- * If a key exists and the model fails, surface the error - do not silently fake success.
+ * Policy runs before any live budget charge.
+ * Live IP + global + in-flight budgets apply only when calling the LLM.
  */
-export async function runOracle(input: OracleRequest): Promise<OracleResponse> {
-  const mood = input.mood?.trim();
-  if (!mood || mood.length < 3) {
+export async function runOracle(
+  input: OracleRequest,
+  options: RunOracleOptions
+): Promise<OracleResponse> {
+  const cfg = loadConfig();
+  const mood = input.mood;
+  if (!mood || moodCodePointLength(mood) < cfg.moodMinChars) {
     throw new Error("MOOD_REQUIRED");
   }
 
-  const seed = resolveSeed(mood, input.seed);
-  const ritual = drawCards(seed, input.drawCount ?? 3);
-  const day = daySeed(input.date);
-  const facts = buildFacts(mood, ritual, day);
+  const now = options.now ?? new Date();
+  const { seed, seedIgnored } = resolveSeed(
+    mood,
+    input.seed,
+    now,
+    cfg.allowClientSeed
+  );
+  const { date: clientDate, dateIgnored } = resolveDay(
+    input.date,
+    cfg.allowClientDate
+  );
 
-  const allowDemo = (process.env.ALLOW_DEMO_WITHOUT_KEY ?? "true") !== "false";
-  const hasKey = Boolean(process.env.XAI_API_KEY);
+  const ritual = drawCards(seed, input.drawCount ?? 3);
+  const day = daySeed(clientDate);
+  const facts = buildFacts(mood, ritual, day.date, seed);
+
+  const baseMeta: OracleMeta = {
+    requestId: options.requestId,
+    day: day.date,
+    confidenceLabel: "theatrical",
+  };
+  if (seedIgnored || dateIgnored) {
+    baseMeta.seedIgnored = true;
+  }
+
+  // Content policy BEFORE any LLM / live budget (R5)
+  const policy = evaluateContentPolicy(mood);
+  if (policy.action === "refuse") {
+    const report = refuseReport(policy.category, mood, facts);
+    ReportSchema.parse(report);
+    return {
+      mode: "refused",
+      seed,
+      ritual,
+      facts,
+      report,
+      meta: {
+        ...baseMeta,
+        policy: { category: policy.category },
+      },
+    };
+  }
+
+  if (cfg.publicDemo) {
+    return {
+      mode: "demo",
+      seed,
+      ritual,
+      facts,
+      report: demoReport(mood, facts, seed),
+      meta: baseMeta,
+    };
+  }
+
+  const hasKey = Boolean(cfg.xaiApiKey);
 
   if (!hasKey) {
-    if (!allowDemo) {
+    if (!cfg.allowDemoWithoutKey) {
       throw new Error("NO_KEY");
     }
     return {
@@ -110,10 +161,29 @@ export async function runOracle(input: OracleRequest): Promise<OracleResponse> {
       seed,
       ritual,
       facts,
-      report: demoReport(mood, facts),
+      report: demoReport(mood, facts, seed),
+      meta: baseMeta,
     };
   }
 
-  const report = await callLlm(mood, facts);
-  return { mode: "live", seed, ritual, facts, report };
+  // Live path — charge live budgets only here
+  const ip = options.ip || "direct-unknown";
+  const budget = acquireLiveBudget(ip);
+  if (!budget.ok) {
+    throw new RateLimitedError(budget.retryAfterSec);
+  }
+
+  try {
+    const { report } = await callLlm(mood, facts);
+    return {
+      mode: "live",
+      seed,
+      ritual,
+      facts,
+      report,
+      meta: baseMeta,
+    };
+  } finally {
+    budget.release();
+  }
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { MOOD_MAX_CHARS_UX } from "../config";
 
 type Props = {
   initial: string;
@@ -8,6 +9,7 @@ type Props = {
 
 export function Mood({ initial, error, onSubmit }: Props) {
   const [mood, setMood] = useState(initial);
+  const len = mood.length;
 
   return (
     <section className="pt-8 md:pt-14 max-w-2xl mx-auto">
@@ -26,11 +28,15 @@ export function Mood({ initial, error, onSubmit }: Props) {
       >
         <textarea
           value={mood}
-          onChange={(e) => setMood(e.target.value)}
+          onChange={(e) => setMood(e.target.value.slice(0, MOOD_MAX_CHARS_UX))}
           rows={5}
+          maxLength={MOOD_MAX_CHARS_UX}
           placeholder="I keep starting things and abandoning them at 80%…"
           className="w-full resize-none rounded-2xl bg-black/30 border border-white/10 px-4 py-3 text-[var(--color-fog)] placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-[var(--color-violet)]/60"
         />
+        <p className="text-xs text-white/35 text-right">
+          {len}/{MOOD_MAX_CHARS_UX} characters (approx)
+        </p>
         {error && (
           <p className="text-sm text-rose-300" role="alert">
             {error}

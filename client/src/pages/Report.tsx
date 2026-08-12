@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import type { OracleResponse } from "../types";
 import { ShareCard } from "../components/ShareCard";
+import { CONFIDENCE_LABEL, MODE_BANNER, SHARE_SUFFIX } from "../copy";
+import { sanitizeShareText } from "../sanitize";
+import { downloadBlob, renderSharePng } from "../shareImage";
+import { fetchOgPng } from "../api";
 
 type Props = {
   mood: string;
@@ -9,15 +13,20 @@ type Props = {
 };
 
 export function Report({ mood, result, onAgain }: Props) {
-  const { report, facts, mode } = result;
+  const { report, facts, mode, meta } = result;
   const day = facts.find((f) => f.kind === "day_seed");
+  const weekday = facts.find((f) => f.kind === "weekday_tone");
+  const hex = facts.find((f) => f.kind === "hexagram");
+  const lunar = facts.find((f) => f.kind === "lunar_phase");
   const [copied, setCopied] = useState(false);
+  const [pngBusy, setPngBusy] = useState(false);
 
-  const shareText = useMemo(
-    () =>
-      `${report.archetype.name} — ${report.shareLine}\n\nvia VibeOracle (pure vibe, not evidence)`,
-    [report]
-  );
+  const shareText = useMemo(() => {
+    const line = sanitizeShareText(
+      `${report.archetype.name} — ${report.shareLine}`
+    );
+    return `${line}\n\n${SHARE_SUFFIX}`;
+  }, [report]);
 
   async function copyShare() {
     try {
@@ -29,12 +38,45 @@ export function Report({ mood, result, onAgain }: Props) {
     }
   }
 
+  async function savePng() {
+    setPngBusy(true);
+    const payload = {
+      archetype: report.archetype.name,
+      tagline: report.archetype.tagline,
+      shareLine: sanitizeShareText(report.shareLine),
+      confidence: report.confidenceTheater,
+    };
+    const name = `vibeoracle-${report.archetype.name.replace(/\s+/g, "-").toLowerCase()}.png`;
+    try {
+      // Prefer server Satori OG (share-chain quality); fall back to local canvas
+      const blob = await fetchOgPng(payload).catch(() =>
+        renderSharePng(payload)
+      );
+      downloadBlob(blob, name);
+    } catch {
+      try {
+        const blob = await renderSharePng(payload);
+        downloadBlob(blob, name);
+      } catch {
+        /* ignore */
+      }
+    } finally {
+      setPngBusy(false);
+    }
+  }
+
+  const banner =
+    mode === "demo"
+      ? MODE_BANNER.demo
+      : mode === "refused"
+        ? MODE_BANNER.refused
+        : MODE_BANNER.live;
+
   return (
     <section className="pt-6 space-y-8">
       <div className="text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-[var(--color-rose)]/75 mb-3">
-          {mode === "demo" ? "Demo oracle · no API key" : "Live oracle"} ·{" "}
-          {report.confidenceTheater}% confidence theater
+          {banner} · {CONFIDENCE_LABEL(report.confidenceTheater)}
         </p>
         <h2 className="font-display text-4xl md:text-6xl text-[var(--color-gold)]">
           {report.archetype.name}
@@ -80,7 +122,7 @@ export function Report({ mood, result, onAgain }: Props) {
           <ShareCard
             archetype={report.archetype.name}
             tagline={report.archetype.tagline}
-            shareLine={report.shareLine}
+            shareLine={sanitizeShareText(report.shareLine)}
             confidence={report.confidenceTheater}
           />
           <button
@@ -89,6 +131,14 @@ export function Report({ mood, result, onAgain }: Props) {
             className="w-full rounded-full border border-white/15 px-5 py-3 text-sm hover:bg-white/5"
           >
             {copied ? "Copied share line" : "Copy share text"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void savePng()}
+            disabled={pngBusy}
+            className="w-full rounded-full border border-[var(--color-gold)]/30 px-5 py-3 text-sm text-[var(--color-gold)] hover:bg-[var(--color-gold)]/10 disabled:opacity-40"
+          >
+            {pngBusy ? "Rendering…" : "Download share PNG"}
           </button>
           <button
             type="button"
@@ -107,7 +157,26 @@ export function Report({ mood, result, onAgain }: Props) {
                 Day-seed {day.number} · {day.tone} · {day.date}
               </p>
             )}
-            <p className="text-white/30">facts stamped: {facts.length}</p>
+            {weekday && weekday.kind === "weekday_tone" && (
+              <p>
+                {weekday.weekday} · {weekday.tone} · {weekday.counsel}
+              </p>
+            )}
+            {hex && hex.kind === "hexagram" && (
+              <p>
+                Hexagram {hex.number} · {hex.name} ({hex.pinyin}) · {hex.counsel}
+              </p>
+            )}
+            {lunar && lunar.kind === "lunar_phase" && (
+              <p>
+                {lunar.name} · illum {Math.round(lunar.illumination * 100)}% ·{" "}
+                {lunar.counsel}
+              </p>
+            )}
+            <p className="text-white/30">
+              facts stamped: {facts.length}
+              {meta.policy ? ` · policy: ${meta.policy.category}` : ""}
+            </p>
           </div>
         </div>
       </div>

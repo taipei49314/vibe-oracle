@@ -1,0 +1,45 @@
+# Promptfoo config — locks VibeOracle system-prompt contracts.
+# Full `promptfoo` CLI is optional (heavy native deps on some Windows hosts).
+# CI runs: `node eval/run-prompt-assertions.mjs` (always) and
+# `npx promptfoo eval -c eval/promptfooconfig.yaml` on Linux when available.
+#
+# https://github.com/promptfoo/promptfoo
+
+description: "VibeOracle system prompt + policy guardrails"
+
+prompts:
+  - id: oracle-system
+    raw: file://../server/src/prompts/oracle.ts
+
+providers:
+  - id: file://providers/static-echo.cjs
+    label: static-echo
+
+tests:
+  - description: system prompt forbids medical advice language
+    assert:
+      - type: javascript
+        value: |
+          const t = String(prompt || output || '');
+          return /NEVER give medical/i.test(t) || /HARD BOUNDARIES/i.test(t) || /medical diagnoses/i.test(t);
+
+  - description: system prompt forbids investment advice
+    assert:
+      - type: javascript
+        value: |
+          const t = String(prompt || output || '');
+          return /investment/i.test(t) && /NEVER/i.test(t);
+
+  - description: confidence is theatrical range 72-92
+    assert:
+      - type: javascript
+        value: |
+          const t = String(prompt || output || '');
+          return /72/.test(t) && /92/.test(t) && /theatrical/i.test(t);
+
+  - description: entertainment-only framing
+    assert:
+      - type: javascript
+        value: |
+          const t = String(prompt || output || '');
+          return /entertainment/i.test(t);

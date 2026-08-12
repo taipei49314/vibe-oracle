@@ -2,18 +2,18 @@ const LINES = [
   "Aligning day-seed…",
   "Shuffling the emotion deck…",
   "Stamping structured facts…",
-  "Consulting the oracle (confidence rising)…",
+  "Consulting the oracle (theatrical intensity rising)…",
 ];
 
 import { useEffect, useState } from "react";
 
 export function Loading() {
-  const [pct, setPct] = useState(88);
+  const [pct, setPct] = useState(72);
   const [lineIdx, setLineIdx] = useState(0);
 
   useEffect(() => {
     const t = window.setInterval(() => {
-      setPct((p) => Math.min(99, p + 1));
+      setPct((p) => Math.min(92, p + 1));
       setLineIdx((i) => (i + 1) % LINES.length);
     }, 380);
     return () => window.clearInterval(t);
@@ -31,7 +31,7 @@ export function Loading() {
       <h2 className="font-display text-3xl mb-6">Reading your weather...</h2>
       <p className="text-sm text-[var(--color-fog)]/55 min-h-[1.5rem]">{LINES[lineIdx]}</p>
       <p className="mt-8 text-xs uppercase tracking-[0.25em] text-[var(--color-rose)]/70">
-        precision theater · {pct}%
+        vibe intensity · theatrical · {pct}
       </p>
     </section>
   );

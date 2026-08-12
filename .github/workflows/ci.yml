@@ -18,7 +18,24 @@ jobs:
         run: npm ci
       - name: Test server
         run: npm run test -w server
+      - name: Prompt / policy assertions (promptfoo-compatible lock)
+        run: npm run eval:prompts
       - name: Build server
         run: npm run build -w server
       - name: Build client
         run: npm run build -w client
+
+  # Optional full promptfoo on Linux (may need network for npx cache)
+  promptfoo-optional:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: promptfoo eval (best-effort)
+        run: npx --yes promptfoo@0.103.12 eval -c eval/promptfooconfig.yaml --no-cache
+        env:
+          PROMPTFOO_DISABLE_TELEMETRY: "1"

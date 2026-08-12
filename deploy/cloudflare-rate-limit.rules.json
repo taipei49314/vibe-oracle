@@ -1,0 +1,42 @@
+{
+  "$schema_comment": "Export-style sketch for Cloudflare custom rules / rate limiting. Import via dashboard or Terraform; not auto-applied.",
+  "name": "vibe-oracle-edge",
+  "rules": [
+    {
+      "id": "oracle-post-per-ip",
+      "description": "Limit POST /api/oracle per client IP",
+      "expression": "(http.request.uri.path eq \"/api/oracle\" and http.request.method eq \"POST\")",
+      "action": "block",
+      "ratelimit": {
+        "characteristics": ["ip.src"],
+        "period": 60,
+        "requests_per_period": 30,
+        "mitigation_timeout": 60
+      }
+    },
+    {
+      "id": "og-get-per-ip",
+      "description": "Limit GET /api/og per client IP",
+      "expression": "(http.request.uri.path eq \"/api/og\" and http.request.method eq \"GET\")",
+      "action": "block",
+      "ratelimit": {
+        "characteristics": ["ip.src"],
+        "period": 60,
+        "requests_per_period": 60,
+        "mitigation_timeout": 60
+      }
+    },
+    {
+      "id": "challenge-suspicious-ua",
+      "description": "Optional managed challenge for empty UA on oracle",
+      "expression": "(http.request.uri.path eq \"/api/oracle\" and http.user_agent eq \"\")",
+      "action": "managed_challenge"
+    }
+  ],
+  "origin_env_checklist": {
+    "TRUST_PROXY": "true",
+    "prefer_header": "CF-Connecting-IP",
+    "CORS_ORIGINS": "https://app.example.com",
+    "SECURE_HEADERS_PROFILE": "cross-origin"
+  }
+}

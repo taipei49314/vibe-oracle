@@ -10,7 +10,9 @@
     "build": "npm run build -w client && npm run build -w server",
     "test": "npm run test -w server",
     "smoke": "node scripts/smoke.mjs",
-    "check": "npm run test && npm run build",
+    "demo:api": "node scripts/demo-api.mjs",
+    "eval:prompts": "node eval/run-prompt-assertions.mjs",
+    "check": "npm run test && npm run eval:prompts && npm run build",
     "start": "npm run start -w server"
   },
   "workspaces": [

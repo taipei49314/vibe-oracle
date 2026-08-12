@@ -1,3 +1,5 @@
+import { CONFIDENCE_LABEL } from "../copy";
+
 type Props = {
   archetype: string;
   tagline: string;
@@ -22,7 +24,7 @@ export function ShareCard({ archetype, tagline, shareLine, confidence }: Props) 
       <div className="relative">
         <p className="text-sm text-[var(--color-gold)] mb-3">{shareLine}</p>
         <p className="text-[10px] uppercase tracking-[0.2em] text-white/35">
-          {confidence}% confidence theater · pure vibe
+          {CONFIDENCE_LABEL(confidence)} · pure vibe
         </p>
       </div>
     </div>
