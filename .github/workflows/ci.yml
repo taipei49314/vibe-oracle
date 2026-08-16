@@ -25,10 +25,11 @@ jobs:
       - name: Build client
         run: npm run build -w client
 
-  # Optional full promptfoo on Linux (may need network for npx cache)
+  # Optional full promptfoo on Linux (may need network for npx cache).
+  # continue-on-error lives on the step: a job-level flag still marks the
+  # commit's check run as failed, which reads as a red default branch.
   promptfoo-optional:
     runs-on: ubuntu-latest
-    continue-on-error: true
     needs: build-test
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +37,7 @@ jobs:
         with:
           node-version: "22"
       - name: promptfoo eval (best-effort)
+        continue-on-error: true
         run: npx --yes promptfoo@0.103.12 eval -c eval/promptfooconfig.yaml --no-cache
         env:
           PROMPTFOO_DISABLE_TELEMETRY: "1"
